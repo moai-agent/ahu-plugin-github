@@ -18,15 +18,53 @@ pub(crate) struct Process {
     pub(crate) deadline: Instant,
     pub(crate) timeout: Duration,
 }
-struct OwnedChild(Child);
+struct OwnedChild {
+    child: Child,
+    reaped: bool,
+}
+impl OwnedChild {
+    fn kill_group(&self) {
+        // SAFETY: an unreaped direct child pins the private process group ID.
+        unsafe {
+            libc::kill(-(self.child.id() as i32), libc::SIGKILL);
+        }
+    }
+    fn exited(&self) -> std::io::Result<bool> {
+        let mut info = std::mem::MaybeUninit::<libc::siginfo_t>::zeroed();
+        // SAFETY: writable siginfo storage; observe our direct child without
+        // reaping it, so its PID cannot be recycled before group cleanup.
+        let status = unsafe {
+            libc::waitid(
+                libc::P_PID,
+                self.child.id(),
+                info.as_mut_ptr(),
+                libc::WEXITED | libc::WNOHANG | libc::WNOWAIT,
+            )
+        };
+        if status < 0 {
+            let error = std::io::Error::last_os_error();
+            return if error.kind() == std::io::ErrorKind::Interrupted {
+                Ok(false)
+            } else {
+                Err(error)
+            };
+        }
+        // SAFETY: zero initialized storage was written by a successful waitid.
+        Ok(unsafe { info.assume_init().si_pid() } != 0)
+    }
+    fn finish(&mut self) -> std::io::Result<std::process::ExitStatus> {
+        self.kill_group();
+        let status = self.child.wait()?;
+        self.reaped = true;
+        Ok(status)
+    }
+}
 impl Drop for OwnedChild {
     fn drop(&mut self) {
-        // SAFETY: the child creates its own process group before exec; its PID
-        // identifies that group. Always kill descendants, even after leader exit.
-        unsafe {
-            libc::kill(-(self.0.id() as i32), libc::SIGKILL);
+        if !self.reaped {
+            self.kill_group();
+            let _ = self.child.wait();
         }
-        let _ = self.0.wait();
     }
 }
 fn home() -> Result<PathBuf, Error> {
@@ -109,8 +147,11 @@ impl Process {
             .process_group(0)
             .spawn()
             .map_err(|_| Error::Unavailable)?;
-        let mut child = OwnedChild(child);
-        let mut stdout = child.0.stdout.take().ok_or(failure)?;
+        let mut child = OwnedChild {
+            child,
+            reaped: false,
+        };
+        let mut stdout = child.child.stdout.take().ok_or(failure)?;
         let mut output = Vec::new();
         let mut chunk = [0u8; 8192];
         loop {
@@ -153,16 +194,17 @@ impl Process {
             output.extend_from_slice(&chunk[..count]);
         }
         loop {
-            match child.0.try_wait().map_err(|_| failure)? {
-                Some(status) => {
+            match child.exited().map_err(|_| failure)? {
+                true => {
+                    let status = child.finish().map_err(|_| failure)?;
                     return if status.success() {
                         Ok(output)
                     } else {
                         Err(failure)
                     };
                 }
-                None if Instant::now() >= deadline => return Err(failure),
-                None => std::thread::sleep(Duration::from_millis(2)),
+                false if Instant::now() >= deadline => return Err(failure),
+                false => std::thread::sleep(Duration::from_millis(2)),
             }
         }
     }
