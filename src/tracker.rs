@@ -28,6 +28,15 @@ fn reserved(body: &str) -> bool {
         .iter()
         .any(|prefix| body.contains(prefix))
 }
+// Preserve the line boundaries accepted by previously posted marker comments.
+// Empty segments (including between CR and LF) cannot match a marker.
+fn marker_lines(body: &str) -> impl Iterator<Item = &str> {
+    body.split([
+        '\n', '\r', '\u{000b}', '\u{000c}', '\u{001c}', '\u{001d}', '\u{001e}', '\u{0085}',
+        '\u{2028}', '\u{2029}',
+    ])
+}
+
 fn body(row: &Value) -> &str {
     row["body"].as_str().unwrap_or("")
 }
@@ -267,7 +276,7 @@ impl Adapter {
             );
         }
         for row in &rows {
-            for line in body(row).lines() {
+            for line in marker_lines(body(row)) {
                 if let Some(raw) = line
                     .strip_prefix(&prefix)
                     .and_then(|s| s.strip_suffix(" -->"))
@@ -498,9 +507,7 @@ impl Adapter {
         let matches: Vec<_> = rows
             .iter()
             .filter(|r| {
-                body(r)
-                    .lines()
-                    .any(|l| l.starts_with(&prefix) && l.ends_with(" -->"))
+                marker_lines(body(r)).any(|l| l.starts_with(&prefix) && l.ends_with(" -->"))
             })
             .collect();
         let exact = matches.iter().filter(|r| body(r).contains(&tag)).count();

@@ -134,6 +134,23 @@ class WireTests(unittest.TestCase):
         self.assertIn('running (revision 4)', rows[-1]['body'])
         self.assertEqual(self.state['writes'], 2)
 
+    def test_marker_line_boundaries_preserve_stale_and_conflict_guards(self):
+        for separator in ['\n', '\r\n', '\r', '\v', '\f', '\x1c', '\x1d', '\x1e', '\x85', '\u2028', '\u2029']:
+            with self.subTest(separator=repr(separator)):
+                self.state = {'rows': [{'body': LINK, 'author': 'ahu-bot'},
+                                       {'body': 'note'+separator+PROGRESS+'9 -->', 'author': 'ahu-bot'}],
+                              'issue': {'number': 7, 'title': 'sample', 'state': 'OPEN', 'updatedAt': 'r1'}}
+                self.save()
+                result = self.invoke(observed(action('sync_task'), revision=8))
+                self.assertEqual(result['status'], 'error', result)
+                self.assertFalse(self.load().get('writes'))
+                prefix = '<!-- ahu-task-evidence:v1:'+HASH+':review:'+hashlib.sha256(b'op').hexdigest()+':'
+                marker = prefix+hashlib.sha256(b'previous body').hexdigest()+' -->'
+                self.state['rows'][1]['body'] = 'note'+separator+marker
+                self.save()
+                self.effect(observed(action('task_evidence', kind='review', body='different body', operation_id='op')), 'conflict')
+                self.assertFalse(self.load().get('writes'))
+
     def test_foreign_links_deny_sync_evidence_and_empty_replay(self):
         self.state['rows'] = [{'body': LINK, 'author': 'collaborator'}]; self.save()
         for data in [observed(action('sync_task')), observed(action('task_evidence', kind='review', body='ok', operation_id='ev')), observed(action('sync_replay'), changes=[])]:
