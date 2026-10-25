@@ -1,0 +1,38 @@
+name: Rust plugin checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  checks:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      CARGO_TARGET_DIR: ${{ runner.temp }}/plugin-target
+      PYTHONDONTWRITEBYTECODE: '1'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install --no-self-update
+      - name: Check Rust and independent protocol fixtures
+        run: |
+          cargo fmt --all --check
+          cargo clippy --workspace --all-targets --features test-driver --locked -- -D warnings
+          cargo test --workspace --locked
+          cargo build --workspace --features test-driver --locked
+          python3 -m unittest discover -s tests -v
+          python3 -m unittest discover -s tracker/tests -v
+      - name: Build production packages without test injection
+        run: cargo run --locked --bin package -- "$RUNNER_TEMP/plugin-dist"
