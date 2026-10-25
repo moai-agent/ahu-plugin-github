@@ -16,6 +16,19 @@ database. Neither package receives credentials from Ahu. The tracker receives
 task context only through an explicitly supplied task-observations envelope and
 persists only a SHA-256 digest of the Ahu task ID in issue markers.
 
+
+## Runtime language policy and migration status
+
+Ahu-maintained customer-facing executables must be Rust and must not require
+Python at installation or runtime. Python is permitted for development tooling,
+tests, and fixtures only. Skills remain text, and the external CLI retains its
+own implementation.
+
+The adapters in this checkout currently use Python and do not yet meet this
+policy. Their next supported release requires Rust replacements with equivalent
+protocol behavior, security checks, and verified live integration. They remain
+external, optional plugins; migration does not move provider code into ahu core.
+
 ## Install a package
 
 Install ahu 0.11.0 or a compatible later version. Clone this repository at the
