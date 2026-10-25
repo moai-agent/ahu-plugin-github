@@ -139,6 +139,12 @@ GitHub Projects V2, or atomic stale-write protection.
 
 ## Updating the Python package
 
+Ahu compatibility pins are exact. Set `compatibility.ahu` to the installed CLI
+version (for example, `"0.11.1"`) and `host_api: 1`. Complete and remove tasks
+that need the old package using the old CLI and binding before upgrading the
+CLI or replacing the binding. Then review and commit the new package and
+compatibility pins before installing the update.
+
 Version 0.1.1 replaces the 0.1.0 Python executables. Build and stage new Rust
 packages before changing bindings; the source `package/` directories are not
 installable runtime packages. Keep the package IDs, but review and commit each
