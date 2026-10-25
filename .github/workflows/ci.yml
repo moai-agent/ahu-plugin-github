@@ -15,7 +15,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     env:
-      CARGO_TARGET_DIR: ${{ runner.temp }}/plugin-target
       PYTHONDONTWRITEBYTECODE: '1'
     defaults:
       run:
@@ -24,6 +23,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+      - name: Set external build directory
+        run: echo "CARGO_TARGET_DIR=$RUNNER_TEMP/plugin-target" >> "$GITHUB_ENV"
       - name: Install pinned Rust toolchain
         run: rustup toolchain install --no-self-update
       - name: Check Rust and independent protocol fixtures
