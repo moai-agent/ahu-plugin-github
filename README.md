@@ -58,9 +58,12 @@ enable it through Ahu's lifecycle. Commit the binding and context lock before
 invocation. Generated Cargo manifests are package identity metadata; they are
 not installation-time build recipes.
 
-Fixture validation of the Rust migration is automated below. Live compatibility
-with the user's native GitHub account remains a separate coordinator-owned
-release check; fixture tests do not establish live compatibility.
+Fixture validation of the Rust migration is automated below. A local check on
+2026-10-25 with gh 2.100.0 installed the pinned Rust packages through ahu,
+read repository and issue-list data, and posted an authorized progress update
+with the tracker adapter. The update was verified independently. Other account
+configurations and live write actions still require their own evidence; fixture
+tests cover the broader operation and failure matrix.
 
 The read-only package supports `repository`, `issue`, and `releases` actions.
 The tracker package supports `search`, `issues`, `issue`, `comment`, `close`,
