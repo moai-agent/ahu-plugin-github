@@ -5,3 +5,6 @@ edition = "2024"
 license = "MIT"
 description = "Read-only GitHub CLI example for Ahu executable plugins"
 publish = false
+
+[dependencies]
+ahu-github-adapters = { path = ".." }

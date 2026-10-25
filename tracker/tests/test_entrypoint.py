@@ -8,7 +8,7 @@ import tempfile
 import unittest
 
 sys.dont_write_bytecode = True
-ENTRY = pathlib.Path(__file__).parents[1] / "package/bin/entrypoint"
+ENTRY = pathlib.Path(__file__).parent / "oracle/entrypoint.py"
 spec = importlib.util.spec_from_loader("github_tracker", SourceFileLoader("github_tracker", str(ENTRY)))
 plugin = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(plugin)

@@ -17,36 +17,50 @@ task context only through an explicitly supplied task-observations envelope and
 persists only a SHA-256 digest of the Ahu task ID in issue markers.
 
 
-## Runtime language policy and migration status
+## Build and install a package
 
-Ahu-maintained customer-facing executables must be Rust and must not require
-Python at installation or runtime. Python is permitted for development tooling,
-tests, and fixtures only. Skills remain text, and the external CLI retains its
-own implementation.
+Both customer executables are standalone Rust binaries with no ahu-core or
+Python runtime dependency. Rust sources share a small local adapter crate;
+`package/` and `tracker/package/` contain source manifests, not installable
+packages. Python exists only under tests as a development oracle and fake CLI.
+Native `gh` and its normal local authentication remain runtime prerequisites.
+Supported build platforms are Unix (macOS and Linux); artifacts are specific to
+the build platform and architecture.
 
-The adapters in this checkout currently use Python and do not yet meet this
-policy. Their next supported release requires Rust replacements with equivalent
-protocol behavior, security checks, and verified live integration. They remain
-external, optional plugins; migration does not move provider code into ahu core.
-
-## Install a package
-
-Install ahu 0.11.0 or a compatible later version. Clone this repository at the
-reviewed release tag, then compute the package digest from that checkout. Each
-package directory has its own identity and digest:
+Build from a reviewed checkout using Rust 1.96 or later and the committed lockfile.
+The explicit Rust packaging command creates a **new** destination containing
+`github-cli/` and `github-tracker/`, each with `bin/entrypoint`, a Cargo identity
+manifest, and `ahu-plugin.md`. It never installs or enables plugins. No build
+runs implicitly during plugin installation, and the packages contain no Python,
+source tree, or test driver. Use an external directory, or a new directory under
+ignored `dist/`; the destination's parent must already exist.
 
 ```sh
-ahu plugins digest "$(pwd -P)/package"
-ahu plugins digest "$(pwd -P)/tracker/package"
+CARGO_TARGET_DIR=/tmp/ahu-rust-github-target cargo run --locked --bin package -- /tmp/ahu-github-dist
+github_package_root="$(cd /tmp/ahu-github-dist && pwd -P)"
+ahu plugins digest "$github_package_root/github-cli"
+ahu plugins digest "$github_package_root/github-tracker"
 ```
 
-Use the selected package's digest as both `revision` and `sha256` in a project
-binding. Point `source.repository` to this checkout and set `source.subdirectory`
-to `package` or `tracker/package`. Use `kind: local`, the package ID
-(`github-cli` or `github-tracker`), version `0.1.0`, compatible Ahu/Host API
-versions, and `grants: [execute]`. Keep the binding disabled during review, then
-install and enable it through Ahu's lifecycle. Commit the binding and resulting
-context lock before invocation.
+Compute package digests **after** building. Use canonical paths: Ahu rejects
+symlinked path components (including `/tmp` on macOS). `SHA256SUMS` in the destination root
+records executable hashes for inspection; these are not Ahu package digests.
+Build results and package digests depend on the toolchain, platform and source;
+this command is reproducible procedure, not a cross-platform byte-identity claim.
+
+Install ahu 0.11.0 or a compatible later version. Use each resulting package's
+digest as both `revision` and `sha256` in its project binding. Set
+`source.repository` to the absolute destination directory and
+`source.subdirectory` to `github-cli` or `github-tracker`. Use `kind: local`, the
+corresponding package ID, version `0.1.0`, compatible Ahu/Host API versions, and
+`grants: [execute]`. Keep the binding disabled during review, then install and
+enable it through Ahu's lifecycle. Commit the binding and context lock before
+invocation. Generated Cargo manifests are package identity metadata; they are
+not installation-time build recipes.
+
+Fixture validation of the Rust migration is automated below. Live compatibility
+with the user's native GitHub account remains a separate coordinator-owned
+release check; fixture tests do not establish live compatibility.
 
 The read-only package supports `repository`, `issue`, and `releases` actions.
 The tracker package supports `search`, `issues`, `issue`, `comment`, `close`,
@@ -123,13 +137,24 @@ GitHub Projects V2, or atomic stale-write protection.
 ## Validate locally
 
 ```sh
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+CARGO_TARGET_DIR=/tmp/ahu-rust-github-target cargo fmt --all --check
+CARGO_TARGET_DIR=/tmp/ahu-rust-github-target cargo clippy --workspace --all-targets --locked -- -D warnings
+CARGO_TARGET_DIR=/tmp/ahu-rust-github-target cargo clippy --no-default-features --all-targets --locked -- -D warnings
+CARGO_TARGET_DIR=/tmp/ahu-rust-github-target cargo test --workspace --locked
+CARGO_TARGET_DIR=/tmp/ahu-rust-github-target cargo build --workspace --features test-driver --locked
+PYTHONDONTWRITEBYTECODE=1 CARGO_TARGET_DIR=/tmp/ahu-rust-github-target python3 -m unittest discover -s tests -v
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tracker/tests -v
 ```
 
-Tests use mocked `gh` responses and never contact GitHub or write to real issues.
-Live read-only checks are appropriate only for repositories the user is
-authorized to inspect. Do not test writes against a real issue.
+The `test-driver` feature builds a development-only executable that accepts a
+fake provider path and timeout. Production entrypoints never consult these
+fixture settings, and packaging explicitly builds without this feature.
+Independent wire/process tests invoke compiled executables, use synthetic
+provider state, and cover all actions, framing, marker authorship, pagination,
+mutation ambiguity, deadlines and descendant cleanup. Original Python unit tests
+remain useful oracle coverage; passing them alone does not validate Rust.
+Tests never contact GitHub or change live issues or cmux sessions. Coordinator
+live checks must use authorized repositories and reviewed write procedures.
 
 Keep sources pinned to the reviewed package digest and inspect the security
 inventory before enabling either package. Installing a package does not grant

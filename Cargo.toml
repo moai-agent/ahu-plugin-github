@@ -1,0 +1,25 @@
+[package]
+name = "ahu-github-adapters"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.96"
+license = "MIT"
+publish = false
+
+[workspace]
+members = ["package", "tracker/package"]
+resolver = "3"
+
+[dependencies]
+serde = "1"
+serde_json = "1"
+sha2 = "0.10"
+libc = "0.2"
+
+[features]
+test-driver = []
+
+[[bin]]
+name = "wire-driver"
+path = "tests/support/driver.rs"
+required-features = ["test-driver"]

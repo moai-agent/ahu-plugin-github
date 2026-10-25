@@ -2,8 +2,10 @@
 
 This repository contains two separately identified Ahu packages. They share a
 source repository but receive separate package digests and project bindings.
-The read-only `github-cli` package is under `package/`; the state-changing
-`github-tracker` package is under `tracker/package/`. Both are same-user
+The read-only `github-cli` sources are under `package/`; the state-changing
+`github-tracker` sources are under `tracker/package/`. The explicit Rust build
+command emits separate installable packages outside the checkout or under ignored
+`dist/`. Both are same-user
 executables, not operating-system sandboxes. Ahu runs either only after the
 project binding is committed, enabled, and granted `execute`.
 
@@ -77,3 +79,51 @@ explicitly pass read or replay task observations to a single invocation. The
 plugin does not subscribe to lifecycle changes or persist a pending-sync queue,
 and it cannot atomically transact with GitHub. GitHub Projects V2 is also not
 implemented.
+
+## Rust migration and process boundary
+
+Customer packages contain native Rust executables, Cargo identity metadata and
+an Ahu manifest only. They have no Python runtime requirement and no ahu-core
+dependency. The original Python implementations live only under `tests/oracle/`
+and `tracker/tests/oracle/`; fake providers and the feature-gated Rust wire
+driver are development fixtures and are excluded from packaging. Installation
+never builds source or executes setup scripts. Digest the generated package,
+not its source template, after the explicit release build.
+
+The Rust boundary rejects nested duplicate JSON keys, invalid UTF-8, trailing
+frames, excessive nesting and requests over 64 KiB. Input has a two-second
+arrival deadline. Provider stdout is limited to 64 KiB, provider stderr is
+sent to the null device, and provider stdin is closed. Read-only provider calls
+have a 12-second deadline; tracker calls have a 20-second limit within a
+26-second overall provider budget. Every child starts in its own process group;
+cleanup kills the group even if its leader has already exited or closed stdout.
+The child uses the OS account home directory as its explicit working directory
+and `HOME`, with only `/usr/bin:/bin` as `PATH`. Provider discovery checks fixed
+system/Homebrew paths and account-local bin directories, never a caller's PATH.
+No shell interpolation is used. Native gh, not this adapter, accesses its local
+authentication store.
+
+Marker comments count only when their GitHub author matches the account returned
+by `gh api user` (ASCII case-insensitive). Foreign or missing authors cannot claim
+completion, authorize evidence or advance revisions. Caller comment and evidence
+bodies reject all reserved Ahu marker prefixes. Invalid legacy progress revision
+strings are ignored; valid revisions remain bounded to unsigned 64-bit values.
+Duplicate progress markers now require reconciliation, consistent with duplicate
+link and operation markers. Repository release and issue-list results also
+reject provider responses exceeding their declared 20/50-row limits.
+
+The migration fixes post-write verification failures: malformed, failed, timed-out
+or oversized verification reads now return `outcome_unknown`, as do later replay
+failures after any write. The caller must reconcile even when earlier replay
+steps were verified; no subsequent step is retried automatically. Before any
+write, stale state, visibility mismatch, missing actors and malformed responses
+fail closed. On the wire, stale/denied/unavailable map to `unsupported`, invalid
+requests map to `invalid_input`, and ordinary provider failures map to `failed`;
+unknown effects use an `ok` result with `requires_reconciliation: true`. The
+read-only adapter retains its generic `failed` error contract. Lost response
+delivery does not prove that a dispatched mutation failed.
+
+Rust unit tests and compiled-executable fixture tests cover the boundary without
+live accounts. Live native authentication and provider compatibility checks are
+still required before release and belong to the coordinator; no fixture result
+is a claim that those live checks occurred.
