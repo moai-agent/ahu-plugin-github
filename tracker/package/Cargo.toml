@@ -1,6 +1,6 @@
 [package]
 name = "ahu-github-tracker-plugin"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license = "MIT"
 description = "GitHub issue tracker for Ahu executable plugins with task linking, progress, and evidence"

@@ -6,7 +6,6 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
-const TARGET: &str = "/tmp/ahu-rust-github-target";
 fn package() -> Result<(), Box<dyn Error>> {
     let args: Vec<_> = std::env::args_os().skip(1).collect();
     if args.len() != 1 {
@@ -28,9 +27,17 @@ fn package() -> Result<(), Box<dyn Error>> {
         return Err("in-checkout output is permitted only under ignored dist/".into());
     }
     let destination = resolved;
+    let target = std::env::var_os("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| root.join("target"));
+    let target = if target.is_absolute() {
+        target
+    } else {
+        root.join(target)
+    };
     let status = Command::new(env!("CARGO"))
         .current_dir(root)
-        .env("CARGO_TARGET_DIR", TARGET)
+        .env("CARGO_TARGET_DIR", &target)
         .args([
             "build",
             "--release",
@@ -57,7 +64,7 @@ fn package() -> Result<(), Box<dyn Error>> {
     ] {
         let package = destination.join(id);
         fs::create_dir_all(package.join("bin"))?;
-        let executable = Path::new(TARGET).join("release").join(binary);
+        let executable = target.join("release").join(binary);
         fs::copy(&executable, package.join("bin/entrypoint"))?;
         fs::copy(
             root.join(source).join("ahu-plugin.md"),
@@ -70,6 +77,9 @@ fn package() -> Result<(), Box<dyn Error>> {
             .next()
             .ok_or("missing package identity")?;
         fs::write(package.join("Cargo.toml"), identity)?;
+        for document in ["LICENSE", "README.md", "SECURITY.md"] {
+            fs::copy(root.join(document), package.join(document))?;
+        }
         let bytes = fs::read(executable)?;
         hashes.push_str(&format!(
             "{:x}  {id}/bin/entrypoint\n",

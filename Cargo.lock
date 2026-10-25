@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "ahu-github-adapters"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "libc",
  "serde",
@@ -14,14 +14,14 @@ dependencies = [
 
 [[package]]
 name = "ahu-github-cli-plugin"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "ahu-github-adapters",
 ]
 
 [[package]]
 name = "ahu-github-tracker-plugin"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "ahu-github-adapters",
 ]

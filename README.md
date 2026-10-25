@@ -30,7 +30,7 @@ the build platform and architecture.
 Build from a reviewed checkout using Rust 1.96 or later and the committed lockfile.
 The explicit Rust packaging command creates a **new** destination containing
 `github-cli/` and `github-tracker/`, each with `bin/entrypoint`, a Cargo identity
-manifest, and `ahu-plugin.md`. It never installs or enables plugins. No build
+manifest, `ahu-plugin.md`, license, README and security inventory. It never installs or enables plugins. No build
 runs implicitly during plugin installation, and the packages contain no Python,
 source tree, or test driver. Use an external directory, or a new directory under
 ignored `dist/`; the destination's parent must already exist.
@@ -52,7 +52,7 @@ Install ahu 0.11.0 or a compatible later version. Use each resulting package's
 digest as both `revision` and `sha256` in its project binding. Set
 `source.repository` to the absolute destination directory and
 `source.subdirectory` to `github-cli` or `github-tracker`. Use `kind: local`, the
-corresponding package ID, version `0.1.0`, compatible Ahu/Host API versions, and
+corresponding package ID, version `0.1.1`, compatible Ahu/Host API versions, and
 `grants: [execute]`. Keep the binding disabled during review, then install and
 enable it through Ahu's lifecycle. Commit the binding and context lock before
 invocation. Generated Cargo manifests are package identity metadata; they are
@@ -136,6 +136,16 @@ model is a foreground one-shot call: lifecycle sync happens only when a caller
 explicitly invokes `sync_task` or `sync_replay` with task observations. It does
 not provide automatic lifecycle subscription, durable pending-sync storage,
 GitHub Projects V2, or atomic stale-write protection.
+
+## Updating the Python package
+
+Version 0.1.1 replaces the 0.1.0 Python executables. Build and stage new Rust
+packages before changing bindings; the source `package/` directories are not
+installable runtime packages. Keep the package IDs, but review and commit each
+binding's version, source directory and new content pins. Use `ahu plugins update`
+for an existing installation, then verify the installed package and invocation.
+Do not reuse the old Python package digest or replace packages needed by an
+active task. The companion skill remains text and can still use `gh` directly.
 
 ## Validate locally
 
